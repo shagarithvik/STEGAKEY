@@ -1,0 +1,277 @@
+# StegaPass USB Extension — Cursor MVP
+
+## Directory Structure (for Cursor)
+
+```
+stegapass-extension/
+├── manifest.json
+├── background.js
+├── content.js
+├── popup.html
+├── popup.js
+├── crypto.js
+├── stego.js
+├── password-generator.js
+├── native/
+│   └── native_host.js
+└── README.md
+```
+
+---
+
+## 1. manifest.json
+
+```json
+{
+  "manifest_version": 3,
+  "name": "StegaPass USB Password Manager",
+  "version": "1.0.0",
+  "description": "Offline steganographic USB-based password manager.",
+  "permissions": ["storage", "scripting", "nativeMessaging", "activeTab", "clipboardWrite"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ]
+}
+```
+
+---
+
+## 2. popup.html
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: sans-serif; width: 280px; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h3>StegaPass USB</h3>
+  <div id="status">Waiting for USB...</div>
+  <input id="master" type="password" placeholder="Master Password" />
+  <button id="unlock">Unlock</button>
+  <button id="genpass">Generate Password</button>
+  <textarea id="genout" readonly></textarea>
+  <script src="popup.js"></script>
+</body>
+</html>
+```
+
+---
+
+## 3. popup.js
+
+```javascript
+const statusEl = document.getElementById('status');
+const masterEl = document.getElementById('master');
+const genOut = document.getElementById('genout');
+let carriers = [];
+
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === 'carrier_ready') {
+    statusEl.textContent = 'USB Vault Detected';
+    carriers = msg.carriers;
+  }
+  if (msg.type === 'usb_removed') {
+    statusEl.textContent = 'USB Removed — Locked';
+    chrome.storage.session.clear();
+  }
+});
+
+document.getElementById('unlock').onclick = async () => {
+  const pw = masterEl.value;
+  if (!pw || carriers.length === 0) return;
+  const vault = [];
+  for (const c of carriers) {
+    const decrypted = await decryptStegoBlob(c.data, pw);
+    vault.push(JSON.parse(decrypted));
+  }
+  await chrome.storage.session.set({ vault });
+  statusEl.textContent = 'Unlocked';
+};
+
+document.getElementById('genpass').onclick = () => {
+  genOut.value = generatePassword();
+};
+```
+
+---
+
+## 4. background.js
+
+```javascript
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.session.clear();
+});
+
+let port = chrome.runtime.connectNative("stegapass_usb_host");
+
+port.onMessage.addListener(async (msg) => {
+  if (msg.type === 'carrier_data') {
+    await chrome.storage.session.set({ carriers: msg.carriers });
+    chrome.runtime.sendMessage({ type: 'carrier_ready', carriers: msg.carriers });
+  }
+  if (msg.type === 'usb_removed') {
+    chrome.storage.session.clear();
+    chrome.runtime.sendMessage({ type: 'usb_removed' });
+  }
+});
+```
+
+---
+
+## 5. content.js
+
+```javascript
+(async () => {
+  const session = await chrome.storage.session.get(['vault']);
+  if (!session.vault) return;
+
+  // autofill
+  const domain = location.hostname;
+  for (const group of session.vault) {
+    for (const entry of group.entries) {
+      if (entry.domain === domain) {
+        const inputs = document.querySelectorAll('input[type=password]');
+        if (inputs.length) inputs[0].value = entry.password;
+      }
+    }
+  }
+})();
+```
+
+---
+
+## 6. crypto.js
+
+```javascript
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(password), { name: 'PBKDF2' }, false, ['deriveKey']
+  );
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' }, key, { name: 'AES-GCM', length: 256 }, false, ['encrypt','decrypt']);
+}
+
+async function decryptStegoBlob(b64, password) {
+  const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  const salt = raw.slice(0,16);
+  const iv = raw.slice(16,28);
+  const data = raw.slice(28);
+  const key = await deriveKey(password, salt);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+  return new TextDecoder().decode(pt);
+}
+```
+
+---
+
+## 7. stego.js (PNG custom chunk extractor)
+
+```javascript
+async function extractStegoChunk(buffer) {
+  const bytes = new Uint8Array(buffer);
+  // search for custom chunk name sPas
+  const marker = new TextEncoder().encode('sPas');
+  for (let i = 0; i < bytes.length - 4; i++) {
+    if (bytes[i]===marker[0] && bytes[i+1]===marker[1] && bytes[i+2]===marker[2] && bytes[i+3]===marker[3]) {
+      const len = (bytes[i-4]<<24)|(bytes[i-3]<<16)|(bytes[i-2]<<8)|(bytes[i-1]);
+      const start = i+4;
+      return bytes.slice(start, start+len);
+    }
+  }
+  return null;
+}
+```
+
+---
+
+## 8. password-generator.js
+
+```javascript
+function generatePassword(len=16) {
+  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*";
+  let o="";
+  for(let i=0;i<len;i++){
+    o += chars.charAt(Math.floor(Math.random()*chars.length));
+  }
+  return o;
+}
+```
+
+---
+
+## 9. native/native_host.js (Node)
+
+```javascript
+const drivelist = require('drivelist');
+const fs = require('fs');
+const path = require('path');
+
+function sendNative(msg){
+  const s = JSON.stringify(msg);
+  const len = Buffer.byteLength(s);
+  const header = Buffer.alloc(4);
+  header.writeUInt32LE(len,0);
+  process.stdout.write(header);
+  process.stdout.write(s);
+}
+
+async function scan(){
+  const drives = await drivelist.list();
+  for(const d of drives){
+    if(d.isUSB && d.mountpoints.length){
+      const root = d.mountpoints[0].path;
+      const marker = path.join(root,'.stps_marker');
+      if(fs.existsSync(marker)){
+        const m = JSON.parse(fs.readFileSync(marker,'utf8'));
+        const carrier = path.join(root,m.carrier_path);
+        const buf = fs.readFileSync(carrier);
+        const b64 = buf.toString('base64');
+        sendNative({type:'carrier_data', carriers:[{data:b64}]});
+      }
+    }
+  }
+}
+setInterval(scan,2000);
+```
+
+---
+
+## 10. .stps_marker (example on USB root)
+
+```json
+{
+  "carrier_path": "vault/carrier.png"
+}
+```
+
+---
+
+## 11. README.md
+
+```
+Plug in USB → marker detected → PNG read → custom chunk extracted → decrypted with master password → stored in session until unplug.
+USB removal clears session.
+```
+
+---
+
+## Behavior Summary
+
+* Vault only unlocks if USB + master password are present.
+* Passwords extracted steganographically.
+* Stored only in temporary session memory.
+* Random password generator included.
+* Unplug instantly locks and wipes.
+

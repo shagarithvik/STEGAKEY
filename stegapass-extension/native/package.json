@@ -1,0 +1,8 @@
+{
+  "name": "stegapass-native-host",
+  "version": "1.0.0",
+  "description": "Native host for StegaPass USB detection",
+  "main": "native_host.js",
+  "dependencies": {}
+}
+

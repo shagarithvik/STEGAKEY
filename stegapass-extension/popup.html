@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<style>
+		* {
+			box-sizing: border-box;
+			margin: 0;
+			padding: 0;
+		}
+		
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+			width: 640px;
+			min-height: 720px;
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			padding: 0;
+		}
+		
+		.container {
+			background: white;
+			margin: 10px;
+			border-radius: 12px;
+			box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+			overflow: hidden;
+		}
+		
+		.header {
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+			padding: 20px;
+			text-align: center;
+		}
+		
+		.header h1 {
+			font-size: 24px;
+			font-weight: 600;
+			margin-bottom: 5px;
+		}
+		
+		.header .subtitle {
+			font-size: 12px;
+			opacity: 0.9;
+		}
+		
+		.content {
+			padding: 20px;
+		}
+		
+		.status-card {
+			background: #f8f9fa;
+			border-left: 4px solid #667eea;
+			padding: 12px 15px;
+			margin-bottom: 20px;
+			border-radius: 4px;
+		}
+		
+		.status-card.locked {
+			border-color: #dc3545;
+		}
+		
+		.status-card.unlocked {
+			border-color: #28a745;
+		}
+		
+		.status-label {
+			font-size: 11px;
+			color: #6c757d;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			margin-bottom: 5px;
+		}
+		
+		.status-value {
+			font-size: 14px;
+			font-weight: 600;
+			color: #212529;
+		}
+		
+		.input-group {
+			margin-bottom: 15px;
+		}
+		
+		.label {
+			font-size: 12px;
+			color: #495057;
+			margin-bottom: 8px;
+			display: block;
+			font-weight: 500;
+		}
+		
+		input[type="password"] {
+			width: 100%;
+			padding: 12px 15px;
+			border: 2px solid #e9ecef;
+			border-radius: 8px;
+			font-size: 14px;
+			transition: all 0.3s ease;
+		}
+		
+		input[type="password"]:focus {
+			outline: none;
+			border-color: #667eea;
+			box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+		}
+		
+		.button-group {
+			display: flex;
+			gap: 10px;
+		}
+		
+		button {
+			flex: 1;
+			padding: 12px 20px;
+			border: none;
+			border-radius: 8px;
+			font-size: 14px;
+			font-weight: 600;
+			cursor: pointer;
+			transition: all 0.3s ease;
+		}
+		
+		.btn-primary {
+			background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+			color: white;
+		}
+		
+		.btn-primary:hover {
+			transform: translateY(-2px);
+			box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+		}
+		
+		.btn-secondary {
+			background: #e9ecef;
+			color: #495057;
+		}
+		
+		.btn-secondary:hover {
+			background: #dee2e6;
+		}
+		
+		.password-gen-section {
+			margin-top: 20px;
+			padding-top: 20px;
+			border-top: 1px solid #e9ecef;
+		}
+		
+		.gen-out {
+			width: 100%;
+			padding: 12px;
+			border: 2px solid #e9ecef;
+			border-radius: 8px;
+			font-size: 14px;
+			resize: vertical;
+			min-height: 60px;
+			font-family: monospace;
+			background: #f8f9fa;
+		}
+		
+		.copy-btn {
+			width: 100%;
+			margin-top: 8px;
+			padding: 10px;
+			background: #28a745;
+			color: white;
+			border: none;
+			border-radius: 8px;
+			font-size: 13px;
+			font-weight: 600;
+			cursor: pointer;
+			display: none;
+		}
+		
+		.copy-btn.show {
+			display: block;
+		}
+		
+		.copy-btn:hover {
+			background: #218838;
+		}
+		
+		.icon {
+			display: inline-block;
+			margin-right: 5px;
+		}
+	</style>
+</head>
+<body>
+	<div class="container">
+		<div class="header">
+			<h1>🔐 StegaPass</h1>
+			<div class="subtitle">USB Password Manager</div>
+		</div>
+		
+		<div class="content">
+			<div class="status-card" id="status">
+				<div class="status-label">Status</div>
+				<div class="status-value" id="status-text">Scanning for USB...</div>
+			</div>
+			
+			<div id="masterSection">
+			<div class="input-group">
+				<label class="label" for="master">Master Password</label>
+				<input id="master" type="password" placeholder="Enter master password" />
+			</div>
+			
+			<div class="button-group">
+				<button id="unlock" class="btn-primary">
+					<span class="icon">🔓</span> Unlock
+				</button>
+			</div>
+			</div>
+			
+			<div class="password-gen-section">
+				<label class="label">Password Generator</label>
+				<div class="button-group">
+					<button id="genpass" class="btn-secondary">Generate</button>
+				</div>
+				<textarea id="genout" class="gen-out" readonly placeholder="Generated password will appear here..."></textarea>
+				<button id="copyBtn" class="copy-btn">📋 Copy to Clipboard</button>
+			</div>
+
+			<div class="password-gen-section" id="vaultSection" style="display:none;">
+				<label class="label" style="display:flex; justify-content:space-between; align-items:center;">
+					<span>Stored Passwords</span>
+					<button id="addEntry" class="btn-primary" style="padding:8px 16px; font-size:12px;">＋ Add New Credential</button>
+				</label>
+				<div id="vaultList" style="max-height:300px; overflow:auto; border:1px solid #e9ecef; border-radius:8px; padding:8px; margin-bottom:10px;"></div>
+				<div id="addForm" style="display:none; margin-top:10px;">
+					<div style="display:flex; gap:8px; margin-bottom:8px;">
+						<input id="addDomain" type="text" placeholder="domain.tld" style="flex:1; padding:10px; border:2px solid #e9ecef; border-radius:8px;">
+						<input id="addUser" type="text" placeholder="username" style="flex:1; padding:10px; border:2px solid #e9ecef; border-radius:8px;">
+						<input id="addPass" type="text" placeholder="password" style="flex:1; padding:10px; border:2px solid #e9ecef; border-radius:8px;">
+					</div>
+					<div style="display:flex; gap:8px;">
+						<button id="saveEntry" class="btn-primary" style="flex:1;">✓ Save</button>
+						<button id="cancelEntry" class="btn-secondary" style="flex:1;">✗ Cancel</button>
+					</div>
+				</div>
+				<div id="offerSave" style="display:none; margin-top:10px; background:#fff3cd; border:1px solid #ffeeba; border-radius:8px; padding:10px;">
+					<div style="font-size:13px; color:#856404; margin-bottom:8px;">Save credentials detected for this site</div>
+					<div style="display:flex; gap:8px;">
+						<input id="offerUser" type="text" placeholder="username" style="flex:1; padding:10px; border:2px solid #e9ecef; border-radius:8px;">
+						<input id="offerPass" type="text" placeholder="password" style="flex:1; padding:10px; border:2px solid #e9ecef; border-radius:8px;">
+						<button id="offerSaveBtn" class="btn-primary" style="flex:0 0 auto;">Save</button>
+						<button id="offerDismissBtn" class="btn-secondary" style="flex:0 0 auto;">Dismiss</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	
+	<script src="crypto.js"></script>
+	<script src="password-generator.js"></script>
+	<script src="stego.js"></script>
+	<script src="popup.js"></script>
+</body>
+</html>
+

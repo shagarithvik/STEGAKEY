@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Get Extension ID</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+        }
+        .result {
+            background: #f0f0f0;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            word-break: break-all;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h2>StegaPass Setup Helper</h2>
+    <p>This page will help you get your extension ID and update the native host configuration.</p>
+    <button onclick="getExtensionId()">Get Extension ID</button>
+    <div id="result"></div>
+    
+    <script>
+        function getExtensionId() {
+            // Get the current extension ID from chrome.runtime
+            const extensionId = chrome.runtime.id;
+            
+            const resultDiv = document.getElementById('result');
+            
+            if (extensionId) {
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3>Your Extension ID:</h3>
+                        <p><strong>${extensionId}</strong></p>
+                        <p>Copy this ID and paste it into the following command:</p>
+                        <code style="background: #fff; padding: 5px; display: block;">
+                            Update native\stegapass_usb_host.json, replacing "YOUR_EXTENSION_ID_HERE" with: <strong>${extensionId}</strong>
+                        </code>
+                    </div>
+                    <div class="result">
+                        <h3>Steps to Fix:</h3>
+                        <ol>
+                            <li>Open: <code>native\stegapass_usb_host.json</code></li>
+                            <li>Find the line: <code>"allowed_origins": []</code></li>
+                            <li>Replace with:<br>
+                                <code>"allowed_origins": [<br>
+                                &nbsp;&nbsp;"chrome-extension://${extensionId}/"<br>
+                                ]</code>
+                            </li>
+                            <li>Save the file</li>
+                            <li>Reload the extension in Chrome</li>
+                        </ol>
+                    </div>
+                `;
+            } else {
+                resultDiv.innerHTML = '<p>Could not get extension ID. Make sure this is running in the extension context.</p>';
+            }
+        }
+    </script>
+</body>
+</html>
+

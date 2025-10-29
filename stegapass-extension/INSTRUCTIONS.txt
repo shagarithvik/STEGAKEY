@@ -1,0 +1,24 @@
+==========================================
+STEGAPASS SETUP INSTRUCTIONS
+==========================================
+
+TO FIX THE "Access to native messaging host is forbidden" ERROR:
+
+1. In Chrome, go to chrome://extensions
+2. Enable "Developer mode" (top right toggle)
+3. Find "StegaPass USB Password Manager" in your list
+4. Copy the Extension ID (the long string like "abcdefghijklmnopqrstuvwxyz123456")
+5. Open the file: native\stegapass_usb_host.json
+6. Find the line that says: "allowed_origins": []
+7. Replace with: "allowed_origins": ["chrome-extension://YOUR_COPIED_ID/"]
+8. Save the file
+9. Go back to chrome://extensions and click "Reload" on your extension
+10. The errors should be gone!
+
+ALTERNATIVE: Use the helper page
+1. Load get_extension_id.html as a page in your extension
+2. Click the button to get your extension ID
+3. Follow the on-screen instructions
+
+==========================================
+

@@ -1,0 +1,5 @@
+{
+  "master_password": "StegaPass2024!",
+  "vault_name": "Test Vault",
+  "entry_count": 2
+}

@@ -1,0 +1,10 @@
+{
+  "name": "stegapass_usb_host",
+  "description": "StegaPass USB detector host",
+  "path": "C:\\Users\\shaga\\Desktop\\fp\\stegapass-extension\\native\\launch_host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://mbkpjebncbgkechdbbjhcdehmojgiomp/"
+  ]
+}
+
