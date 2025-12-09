@@ -163,24 +163,18 @@ function renderVault(vault) {
             copyPasswordBtn.textContent = '📋';
             copyPasswordBtn.className = 'vault-entry-btn';
             copyPasswordBtn.title = 'Copy password';
-            copyPasswordBtn.onclick = () => {
-                navigator.clipboard.writeText(entry.password).then(() => {
+            copyPasswordBtn.onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(entry.password);
                     const original = copyPasswordBtn.textContent;
                     copyPasswordBtn.textContent = '✓';
                     setTimeout(() => {
                         copyPasswordBtn.textContent = original;
                     }, 1500);
-                }).catch(err => {
-                    console.error('Copy failed:', err);
-                    // Fallback method
-                    passwordInput.select();
-                    document.execCommand('copy');
-                    const original = copyPasswordBtn.textContent;
-                    copyPasswordBtn.textContent = '✓';
-                    setTimeout(() => {
-                        copyPasswordBtn.textContent = original;
-                    }, 1500);
-                });
+                } catch (err) {
+                    console.error('Clipboard API failed:', err);
+                    updateStatus('⚠️ Copy failed - clipboard access denied', 'error');
+                }
             };
             
             actions.appendChild(showBtn);
@@ -401,25 +395,19 @@ document.getElementById('genpass').onclick = () => {
 	updateStrengthBar(password);
 };
 
-copyBtn.onclick = () => {
+copyBtn.onclick = async () => {
 	const password = genOut.value;
-	navigator.clipboard.writeText(password).then(() => {
+	try {
+		await navigator.clipboard.writeText(password);
 		copyBtn.textContent = '✓ Copied!';
 		copyBtn.classList.add('copied');
 		setTimeout(() => {
 			copyBtn.textContent = '📋 Copy to Clipboard';
 			copyBtn.classList.remove('copied');
 		}, 2000);
-	}).catch(() => {
-		// Fallback for older browsers
-		genOut.select();
-		document.execCommand('copy');
-		copyBtn.textContent = '✓ Copied!';
-		copyBtn.classList.add('copied');
-		setTimeout(() => {
-			copyBtn.textContent = '📋 Copy to Clipboard';
-			copyBtn.classList.remove('copied');
-		}, 2000);
-	});
+	} catch (err) {
+		console.error('Clipboard API failed:', err);
+		updateStatus('⚠️ Copy failed - clipboard access denied', 'error');
+	}
 };
 
