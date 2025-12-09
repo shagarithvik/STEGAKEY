@@ -28,6 +28,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 function initPort() {
 	if (port) {
+		console.log('Native host already connected');
 		return; // Already connected
 	}
 	
@@ -37,25 +38,53 @@ function initPort() {
 		
 		port.onMessage.addListener(async (msg) => {
 			console.log('Received from native host:', msg);
+			
+			if (!msg || !msg.type) {
+				console.warn('Invalid message from native host:', msg);
+				return;
+			}
+			
 			if (msg.type === 'carrier_data') {
 				carriers = msg.carriers || [];
-				await chrome.storage.session.set({ carriers: carriers });
-				chrome.runtime.sendMessage({ type: 'carrier_ready', carriers: carriers });
+				console.log('Carriers updated:', carriers.length);
+				
+				try {
+					await chrome.storage.session.set({ carriers: carriers });
+					// Notify popup
+					chrome.runtime.sendMessage({ type: 'carrier_ready', carriers: carriers }).catch(err => {
+						console.log('No popup to notify (this is normal)');
+					});
+				} catch (err) {
+					console.error('Failed to store carriers:', err);
+				}
 			}
+			
 			if (msg.type === 'usb_removed') {
+				console.log('USB removed, clearing session');
 				carriers = [];
-				chrome.storage.session.clear();
-				chrome.runtime.sendMessage({ type: 'usb_removed' });
+				try {
+					await chrome.storage.session.clear();
+					chrome.runtime.sendMessage({ type: 'usb_removed' }).catch(err => {
+						console.log('No popup to notify (this is normal)');
+					});
+				} catch (err) {
+					console.error('Failed to clear session:', err);
+				}
 			}
 		});
 		
 		port.onDisconnect.addListener(() => {
-			console.log('Native host disconnected');
+			const error = chrome.runtime.lastError;
+			if (error) {
+				console.log('Native host disconnected with error:', error.message);
+			} else {
+				console.log('Native host disconnected normally');
+			}
 			port = null;
 			carriers = [];
 		});
 		
-		console.log('Native host connected successfully');
+		console.log('Native host connection initiated');
 	} catch (err) {
 		console.error('Native host connection failed:', err.message);
 		port = null;
