@@ -18,15 +18,28 @@ const offerUser = document.getElementById('offerUser');
 const offerPass = document.getElementById('offerPass');
 const offerSaveBtn = document.getElementById('offerSaveBtn');
 const offerDismissBtn = document.getElementById('offerDismissBtn');
+const passLengthEl = document.getElementById('passLength');
+const includeSymbolsEl = document.getElementById('includeSymbols');
+const strengthBar = document.getElementById('strengthBar');
+const strengthBarFill = document.getElementById('strengthBarFill');
 let currentVault = null; // array of groups
 let carriers = [];
+
+// Enable Enter key for master password input
+if (masterEl) {
+	masterEl.addEventListener('keypress', (e) => {
+		if (e.key === 'Enter') {
+			document.getElementById('unlock').click();
+		}
+	});
+}
 
 // Request connection to native host (try-catch to handle errors)
 try {
     chrome.runtime.sendMessage({ type: 'connect_native' }, () => {
         if (chrome.runtime.lastError) {
             console.warn('Native host not available:', chrome.runtime.lastError.message);
-            if (statusEl) statusEl.textContent = 'Scanning for USB...';
+            updateStatus('Scanning for USB...', 'default');
             return;
         }
         // Fetch any cached carriers after connecting
@@ -36,10 +49,10 @@ try {
                     console.warn('get_carriers failed:', chrome.runtime.lastError.message);
                     return;
                 }
-            if (res && Array.isArray(res.carriers) && res.carriers.length) {
-                carriers = res.carriers;
-                    statusEl.textContent = 'USB Vault Detected';
-            }
+                if (res && Array.isArray(res.carriers) && res.carriers.length) {
+                    carriers = res.carriers;
+                    updateStatus('✓ USB Vault Detected', 'unlocked');
+                }
             });
         } catch (e) {
             console.warn('get_carriers send failed:', e);
@@ -91,27 +104,86 @@ function renderVault(vault) {
     if (!Array.isArray(vault)) return;
     vaultSection.style.display = 'block';
     vaultList.innerHTML = '';
+    
+    if (vault.length === 0 || vault.every(g => !g.entries || g.entries.length === 0)) {
+        vaultList.innerHTML = '<div style="text-align:center; padding:20px; color:#6c757d;">No passwords stored yet. Add your first credential!</div>';
+        return;
+    }
+    
     for (const group of vault) {
+        if (!group.entries || group.entries.length === 0) continue;
+        
         const groupTitle = document.createElement('div');
-        groupTitle.textContent = group.name || 'Group';
-        groupTitle.style.cssText = 'font-weight:600; margin:6px 0; color:#495057;';
+        groupTitle.textContent = group.name || 'Vault';
+        groupTitle.style.cssText = 'font-weight:600; margin:12px 0 8px 0; color:#495057; font-size:14px;';
         vaultList.appendChild(groupTitle);
-        if (Array.isArray(group.entries)) {
-            for (const entry of group.entries) {
-                const row = document.createElement('div');
-                row.style.cssText = 'display:flex; gap:8px; align-items:center; padding:6px; border-bottom:1px solid #f1f3f5;';
-                const d = document.createElement('div');
-                d.style.cssText = 'flex:1; font-size:13px; color:#212529;';
-                d.textContent = `${entry.domain} — ${entry.username}`;
-                const p = document.createElement('input');
-                p.type = 'text';
-                p.readOnly = true;
-                p.value = entry.password;
-                p.style.cssText = 'flex:1; padding:6px; border:1px solid #dee2e6; border-radius:6px; font-family:monospace;';
-                row.appendChild(d);
-                row.appendChild(p);
-                vaultList.appendChild(row);
-            }
+        
+        for (const entry of group.entries) {
+            const row = document.createElement('div');
+            row.className = 'vault-entry';
+            
+            const info = document.createElement('div');
+            info.className = 'vault-entry-info';
+            
+            const domain = document.createElement('div');
+            domain.className = 'vault-entry-domain';
+            domain.textContent = entry.domain || 'No domain';
+            
+            const username = document.createElement('div');
+            username.className = 'vault-entry-username';
+            username.textContent = entry.username || 'No username';
+            
+            info.appendChild(domain);
+            info.appendChild(username);
+            
+            const passwordInput = document.createElement('input');
+            passwordInput.type = 'password';
+            passwordInput.readOnly = true;
+            passwordInput.value = entry.password;
+            passwordInput.className = 'vault-entry-password';
+            
+            const actions = document.createElement('div');
+            actions.className = 'vault-entry-actions';
+            
+            const showBtn = document.createElement('button');
+            showBtn.textContent = '👁️';
+            showBtn.className = 'vault-entry-btn';
+            showBtn.title = 'Toggle visibility';
+            showBtn.onclick = () => {
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    showBtn.textContent = '🙈';
+                } else {
+                    passwordInput.type = 'password';
+                    showBtn.textContent = '👁️';
+                }
+            };
+            
+            const copyPasswordBtn = document.createElement('button');
+            copyPasswordBtn.textContent = '📋';
+            copyPasswordBtn.className = 'vault-entry-btn';
+            copyPasswordBtn.title = 'Copy password';
+            copyPasswordBtn.onclick = async () => {
+                try {
+                    await navigator.clipboard.writeText(entry.password);
+                    const original = copyPasswordBtn.textContent;
+                    copyPasswordBtn.textContent = '✓';
+                    setTimeout(() => {
+                        copyPasswordBtn.textContent = original;
+                    }, 1500);
+                } catch (err) {
+                    console.error('Clipboard API failed:', err);
+                    updateStatus('⚠️ Copy failed - clipboard access denied', 'error');
+                }
+            };
+            
+            actions.appendChild(showBtn);
+            actions.appendChild(copyPasswordBtn);
+            
+            row.appendChild(info);
+            row.appendChild(passwordInput);
+            row.appendChild(actions);
+            vaultList.appendChild(row);
         }
     }
 }
@@ -135,22 +207,55 @@ saveEntryBtn.onclick = async () => {
     const domain = (addDomain.value || '').trim();
     const username = (addUser.value || '').trim();
     const password = (addPass.value || '').trim();
-    if (!domain || !password) {
-        updateStatus('✗ Domain and password required', 'error');
+    
+    if (!domain) {
+        updateStatus('✗ Domain is required', 'error');
+        addDomain.focus();
         return;
     }
+    
+    if (!password) {
+        updateStatus('✗ Password is required', 'error');
+        addPass.focus();
+        return;
+    }
+    
+    // Basic domain validation
+    if (domain.includes(' ') || domain.includes('/')) {
+        updateStatus('✗ Invalid domain format (use example.com)', 'error');
+        addDomain.focus();
+        return;
+    }
+    
     // Put into first group; create if missing
     if (!currentVault.length) currentVault.push({ name: 'Vault', entries: [] });
     currentVault[0].entries = currentVault[0].entries || [];
+    
+    // Check for duplicate
+    const exists = currentVault[0].entries.some(e => 
+        e.domain === domain && e.username === username
+    );
+    
+    if (exists) {
+        updateStatus('✗ Entry already exists for this domain/username', 'error');
+        return;
+    }
+    
     currentVault[0].entries.push({ domain, username, password });
-    await chrome.storage.session.set({ vault: currentVault });
-    renderVault(currentVault);
-    addDomain.value = '';
-    addUser.value = '';
-    addPass.value = '';
-    addForm.style.display = 'none';
-    addEntryBtn.style.display = 'block';
-    updateStatus('✓ Entry added', 'unlocked');
+    
+    try {
+        await chrome.storage.session.set({ vault: currentVault });
+        renderVault(currentVault);
+        addDomain.value = '';
+        addUser.value = '';
+        addPass.value = '';
+        addForm.style.display = 'none';
+        addEntryBtn.style.display = 'block';
+        updateStatus('✓ Credential added successfully', 'unlocked');
+    } catch (err) {
+        console.error('Save failed:', err);
+        updateStatus('✗ Failed to save credential', 'error');
+    }
 };
 
 cancelEntryBtn.onclick = () => {
@@ -185,12 +290,26 @@ offerDismissBtn.onclick = async () => {
 
 document.getElementById('unlock').onclick = async () => {
 	const pw = masterEl.value;
-	if (!pw || carriers.length === 0) {
-		updateStatus('✗ No USB detected or master password', 'error');
+	
+	// Validate inputs
+	if (!pw) {
+		updateStatus('✗ Please enter master password', 'error');
+		masterEl.focus();
 		return;
 	}
 	
-	updateStatus('🔓 Unlocking vault...', 'default');
+	if (carriers.length === 0) {
+		updateStatus('✗ No USB vault detected. Please plug in your USB drive.', 'error');
+		return;
+	}
+	
+	// Disable button and show loading state
+	const unlockBtn = document.getElementById('unlock');
+	const originalText = unlockBtn.innerHTML;
+	unlockBtn.disabled = true;
+	unlockBtn.innerHTML = '<span class="loading"></span> Unlocking...';
+	updateStatus('🔓 Decrypting vault...', 'default');
+	
 	const vault = [];
 	try {
 		for (const c of carriers) {
@@ -202,42 +321,93 @@ document.getElementById('unlock').onclick = async () => {
 				if (chunk && chunk.length) {
 					payloadB64 = btoa(String.fromCharCode(...chunk));
 				}
-			} catch (_) {}
+			} catch (extractErr) {
+				console.warn('Stego extraction failed, trying direct decrypt:', extractErr);
+			}
 
 			const decrypted = await decryptStegoBlob(payloadB64, pw);
-			vault.push(JSON.parse(decrypted));
+			const parsed = JSON.parse(decrypted);
+			vault.push(parsed);
 		}
 	} catch (err) {
 		console.error('Decrypt failed:', err);
-		updateStatus('✗ Decryption failed. Check USB/password.', 'error');
+		updateStatus('✗ Decryption failed. Please check your master password.', 'error');
+		unlockBtn.disabled = false;
+		unlockBtn.innerHTML = originalText;
+		// Clear password field for retry
+		masterEl.value = '';
+		masterEl.focus();
 		return;
 	}
+	
     try {
         await chrome.storage.session.set({ vault });
         currentVault = vault;
         renderVault(currentVault);
-        updateStatus('✓ Vault Unlocked!', 'unlocked');
+        updateStatus('✓ Vault Unlocked Successfully!', 'unlocked');
         // Hide master controls to prevent re-prompt loop
         if (masterSection) masterSection.style.display = 'none';
         masterEl.value = '';
+        unlockBtn.disabled = false;
+        unlockBtn.innerHTML = originalText;
     } catch (err) {
 		console.error('Storage error:', err);
-		updateStatus('✗ Error saving vault', 'error');
+		updateStatus('✗ Error saving vault to session', 'error');
+		unlockBtn.disabled = false;
+		unlockBtn.innerHTML = originalText;
 	}
 };
 
+function calculatePasswordStrength(password) {
+	let strength = 0;
+	if (password.length >= 8) strength += 20;
+	if (password.length >= 12) strength += 20;
+	if (password.length >= 16) strength += 10;
+	if (/[a-z]/.test(password)) strength += 10;
+	if (/[A-Z]/.test(password)) strength += 10;
+	if (/[0-9]/.test(password)) strength += 10;
+	if (/[^a-zA-Z0-9]/.test(password)) strength += 20;
+	
+	return Math.min(strength, 100);
+}
+
+function updateStrengthBar(password) {
+	const strength = calculatePasswordStrength(password);
+	strengthBar.style.display = 'block';
+	strengthBarFill.style.width = strength + '%';
+	
+	strengthBarFill.className = 'password-strength-bar';
+	if (strength < 50) {
+		strengthBarFill.classList.add('weak');
+	} else if (strength < 80) {
+		strengthBarFill.classList.add('medium');
+	} else {
+		strengthBarFill.classList.add('strong');
+	}
+}
+
 document.getElementById('genpass').onclick = () => {
-	const password = generatePassword();
+	const length = parseInt(passLengthEl.value) || 16;
+	const includeSymbols = includeSymbolsEl.checked;
+	const password = generatePassword(length, includeSymbols);
 	genOut.value = password;
 	copyBtn.classList.add('show');
+	updateStrengthBar(password);
 };
 
-copyBtn.onclick = () => {
-	genOut.select();
-	document.execCommand('copy');
-	copyBtn.textContent = '✓ Copied!';
-	setTimeout(() => {
-		copyBtn.textContent = '📋 Copy to Clipboard';
-	}, 2000);
+copyBtn.onclick = async () => {
+	const password = genOut.value;
+	try {
+		await navigator.clipboard.writeText(password);
+		copyBtn.textContent = '✓ Copied!';
+		copyBtn.classList.add('copied');
+		setTimeout(() => {
+			copyBtn.textContent = '📋 Copy to Clipboard';
+			copyBtn.classList.remove('copied');
+		}, 2000);
+	} catch (err) {
+		console.error('Clipboard API failed:', err);
+		updateStatus('⚠️ Copy failed - clipboard access denied', 'error');
+	}
 };
 
